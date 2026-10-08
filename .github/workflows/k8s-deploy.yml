@@ -1,0 +1,42 @@
+name: Deploy to Minikube
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start Minikube cluster
+        uses: medyagh/setup-minikube@latest
+
+      - name: Cluster info
+        run: |
+          minikube status
+          kubectl get nodes -o wide
+
+      - name: Apply Deployment and Service manifests
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/web-app --timeout=120s
+
+      - name: Verify running pods
+        run: |
+          kubectl get deployments
+          kubectl get pods -o wide
+          kubectl get svc web-app-service
+          kubectl describe service web-app-service
+
+      - name: Access the application
+        run: |
+          URL=$(minikube service web-app-service --url)
+          echo "Service URL: $URL"
+          curl -s "$URL" | grep -o "<title>.*</title>"
