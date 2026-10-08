@@ -1,0 +1,75 @@
+name: Manage Docker Containers, Images and Compose
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "compose/**"
+      - ".github/workflows/docker-manage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUN: 'run(){ echo "$ $*"; eval "$@"; echo; }'
+  REGISTRY_IMAGE: ghcr.io/7uyash/lab2-app
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 1. Container lifecycle
+        run: |
+          eval "$RUN"
+          docker build -q -t lab2-app:1.0 --label org.opencontainers.image.source=https://github.com/7uyash/devops-lab2 app/ >/dev/null
+          run docker run -d --name web1 -p 8081:8080 lab2-app:1.0
+          run docker run -d --name web2 -p 8082:8080 lab2-app:1.0
+          run "docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'"
+          run docker stop web2
+          run "docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'"
+          run docker start web2
+          run "docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'"
+          run docker restart web1
+          run "curl -s http://localhost:8081; echo"
+          run docker rm -f web1 web2
+          run "docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'"
+
+      - name: 2. Tag and push images to a registry
+        run: |
+          eval "$RUN"
+          run "docker images lab2-app"
+          run docker tag lab2-app:1.0 $REGISTRY_IMAGE:1.0
+          run docker tag lab2-app:1.0 $REGISTRY_IMAGE:latest
+          run "docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}' | grep -E 'REPOSITORY|lab2-app'"
+          echo '$ echo $GITHUB_TOKEN | docker login ghcr.io -u 7uyash --password-stdin'
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>&1 | grep -v WARNING
+          echo
+          run docker push $REGISTRY_IMAGE:1.0
+          run docker push $REGISTRY_IMAGE:latest
+          run docker rmi $REGISTRY_IMAGE:1.0 $REGISTRY_IMAGE:latest lab2-app:1.0
+          run docker pull $REGISTRY_IMAGE:1.0
+          run "docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}' | grep -E 'REPOSITORY|lab2-app'"
+
+      - name: 3. Docker Compose multi-container setup
+        working-directory: compose
+        run: |
+          eval "$RUN"
+          run docker compose version
+          run cat docker-compose.yml
+          run "docker compose up -d --build --scale app=3 2>&1 | grep -vE '^#|^ *$'"
+          sleep 5
+          run docker compose ps
+          run "for i in 1 2 3 4 5 6; do curl -s http://localhost:8000; echo; done"
+          run docker compose logs proxy --tail 6
+          run docker network ls --filter name=compose
+          run docker compose down
+          run docker compose ps

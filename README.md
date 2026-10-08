@@ -19,3 +19,7 @@ Suyash Sahu — Roll No. 2301010476 — K R Mangalam University
 
 ## Task 4: Containerize a sample application using Docker
 - `.github/workflows/docker.yml` — builds `app/Dockerfile`, shows the image layers, runs the container and tests it
+
+## Task 5: Manage Docker containers and images
+- `compose/docker-compose.yml` + `compose/nginx.conf` — nginx reverse proxy in front of 3 app containers
+- `.github/workflows/docker-manage.yml` — container lifecycle, tagging and pushing to GitHub Container Registry, Docker Compose
