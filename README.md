@@ -26,3 +26,6 @@ Suyash Sahu — Roll No. 2301010476 — K R Mangalam University
 
 ## Task 6: Docker storage
 - `.github/workflows/docker-storage.yml` — container-layer data loss, named volume persistence, bind mount
+
+## Task 7: Docker networking
+- `.github/workflows/docker-network.yml` — user-defined bridge network, communication by container name and by IP, isolation from the default bridge

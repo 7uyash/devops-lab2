@@ -1,0 +1,62 @@
+name: Docker Network
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/docker-network.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUN: 'run(){ echo "$ $*"; eval "$@"; echo; }'
+
+jobs:
+  network:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Create a network and two containers
+        run: |
+          eval "$RUN"
+          docker pull -q nginx:1.27-alpine >/dev/null; docker pull -q alpine:3.20 >/dev/null
+          run docker network create --driver bridge --subnet 172.25.0.0/16 labnet
+          run "docker network ls --filter driver=bridge"
+          run docker run -d --name web --network labnet nginx:1.27-alpine
+          run docker run -d --name client --network labnet alpine:3.20 sleep 600
+          run "docker network inspect labnet --format '{{range .Containers}}{{.Name}} -> {{.IPv4Address}}{{println}}{{end}}'"
+
+      - name: 2. Communicate using container names
+        run: |
+          eval "$RUN"
+          run docker exec client nslookup web
+          run docker exec client ping -c 3 web
+          run "docker exec client wget -qO- http://web | grep -o '<title>.*</title>'"
+
+      - name: 3. Communicate using container IP addresses
+        run: |
+          eval "$RUN"
+          run "WEB_IP=\$(docker inspect -f '{{.NetworkSettings.Networks.labnet.IPAddress}}' web); echo WEB_IP=\$WEB_IP"
+          WEB_IP=$(docker inspect -f '{{.NetworkSettings.Networks.labnet.IPAddress}}' web)
+          run docker exec client ping -c 3 $WEB_IP
+          run "docker exec client wget -qO- http://$WEB_IP | grep -o '<title>.*</title>'"
+          run "docker exec client ip addr show eth0 | grep 'inet '"
+
+      - name: 4. Isolation from the default bridge
+        run: |
+          eval "$RUN"
+          WEB_IP=$(docker inspect -f '{{.NetworkSettings.Networks.labnet.IPAddress}}' web)
+          run docker run -d --name outsider alpine:3.20 sleep 600
+          run "docker exec outsider ping -c 2 -W 1 web || echo '=> name not resolvable from the default bridge'"
+          run "docker exec outsider ping -c 2 -W 1 $WEB_IP || echo '=> IP not reachable: different network'"
+          run docker network connect labnet outsider
+          run docker exec outsider ping -c 2 web
+          run "docker network inspect labnet --format '{{range .Containers}}{{.Name}} -> {{.IPv4Address}}{{println}}{{end}}'"
+
+      - name: 5. Clean up
+        run: |
+          eval "$RUN"
+          run docker rm -f web client outsider
+          run docker network rm labnet
