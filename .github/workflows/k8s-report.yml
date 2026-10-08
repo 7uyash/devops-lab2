@@ -32,8 +32,9 @@ jobs:
         run: |
           eval "$RUN"
           run cat app/Dockerfile
-          run minikube image build -t lab2-app:1.0 --build-opt=build-arg=APP_VERSION=1.0 app/
-          run minikube image build -t lab2-app:2.0 --build-opt=build-arg=APP_VERSION=2.0 app/
+          run minikube image build -t lab2-app:1.0 app/
+          cp -r app /tmp/app-v2 && sed -i 's/ARG APP_VERSION=1.0/ARG APP_VERSION=2.0/' /tmp/app-v2/Dockerfile
+          run minikube image build -t lab2-app:2.0 /tmp/app-v2
           run "minikube image ls | grep lab2-app"
 
       - name: 2. Deploy to Kubernetes
