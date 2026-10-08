@@ -1,0 +1,82 @@
+name: Rolling Update, Rollback and Scaling
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "k8s/strategy/**"
+      - ".github/workflows/k8s-strategies.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUN: 'run(){ echo "$ $*"; eval "$@"; echo; }'
+
+jobs:
+  strategies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start Minikube cluster
+        uses: medyagh/setup-minikube@latest
+
+      - name: 1. Initial deployment (v1)
+        run: |
+          eval "$RUN"
+          run kubectl apply -f k8s/strategy/
+          run kubectl rollout status deployment/web-rolling --timeout=120s
+          run kubectl get deployment web-rolling -o wide
+          run kubectl get pods -l app=web-rolling
+
+      - name: 2. Rolling update to v2
+        run: |
+          eval "$RUN"
+          run kubectl set image deployment/web-rolling web=nginx:1.28-alpine
+          run kubectl annotate deployment/web-rolling kubernetes.io/change-cause=\"v2: rolling update to nginx:1.28-alpine\" --overwrite
+          run kubectl rollout status deployment/web-rolling --timeout=120s
+          run kubectl get deployment web-rolling -o wide
+          run kubectl get rs -l app=web-rolling
+          run kubectl rollout history deployment/web-rolling
+
+      - name: 3. Faulty update (v3) and rollback
+        run: |
+          eval "$RUN"
+          run kubectl set image deployment/web-rolling web=nginx:9.99-broken
+          run kubectl annotate deployment/web-rolling kubernetes.io/change-cause=\"v3: faulty image nginx:9.99-broken\" --overwrite
+          run "kubectl rollout status deployment/web-rolling --timeout=40s || echo 'Rollout failed: new pods cannot pull image'"
+          run kubectl get pods -l app=web-rolling
+          run kubectl rollout history deployment/web-rolling
+          run kubectl rollout undo deployment/web-rolling
+          run kubectl rollout status deployment/web-rolling --timeout=120s
+          run "kubectl get deployment web-rolling -o jsonpath='{.spec.template.spec.containers[0].image}{\"\\n\"}'"
+          run kubectl get pods -l app=web-rolling
+          run kubectl rollout history deployment/web-rolling
+
+      - name: 4. Rollback to a specific revision (v1)
+        run: |
+          eval "$RUN"
+          run kubectl rollout undo deployment/web-rolling --to-revision=1
+          run kubectl rollout status deployment/web-rolling --timeout=120s
+          run "kubectl get deployment web-rolling -o jsonpath='{.spec.template.spec.containers[0].image}{\"\\n\"}'"
+
+      - name: 5. Scale replicas
+        run: |
+          eval "$RUN"
+          run kubectl scale deployment/web-rolling --replicas=8
+          run kubectl rollout status deployment/web-rolling --timeout=120s
+          run kubectl get deployment web-rolling
+          run kubectl get pods -l app=web-rolling
+          run kubectl scale deployment/web-rolling --replicas=2
+          sleep 20
+          run kubectl get deployment web-rolling
+          run kubectl get pods -l app=web-rolling
+
+      - name: 6. Verify the application
+        run: |
+          eval "$RUN"
+          run "curl -s \$(minikube service web-rolling-service --url) | grep -o '<title>.*</title>'"

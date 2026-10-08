@@ -3,6 +3,10 @@ name: Deploy to Minikube
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "k8s/deployment.yaml"
+      - "k8s/service.yaml"
+      - ".github/workflows/k8s-deploy.yml"
   workflow_dispatch:
 
 jobs:
