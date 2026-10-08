@@ -1,0 +1,58 @@
+name: Docker Build and Run
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/docker.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUN: 'run(){ echo "$ $*"; eval "$@"; echo; }'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 1. Dockerfile and build
+        run: |
+          eval "$RUN"
+          run docker --version
+          run cat app/Dockerfile
+          run "DOCKER_BUILDKIT=1 docker build --progress=plain -t lab2-app:1.0 app/ 2>&1 | grep -E '^#[0-9]+ (\[|DONE|CACHED|naming|writing)'"
+          run docker images lab2-app
+
+      - name: 2. Image layers
+        run: |
+          eval "$RUN"
+          run docker history lab2-app:1.0
+          run "docker inspect lab2-app:1.0 --format '{{range .RootFS.Layers}}{{println .}}{{end}}'"
+          run "docker inspect lab2-app:1.0 --format 'User={{.Config.User}}  ExposedPorts={{.Config.ExposedPorts}}  Cmd={{.Config.Cmd}}  Env={{.Config.Env}}'"
+
+      - name: 3. Run the container
+        run: |
+          eval "$RUN"
+          run docker run -d --name lab2-app -p 8080:8080 lab2-app:1.0
+          sleep 35
+          run docker ps
+          run "curl -s http://localhost:8080; echo"
+          run "curl -s http://localhost:8080/health; echo"
+          run "docker inspect lab2-app --format 'Status={{.State.Status}}  Health={{.State.Health.Status}}  IP={{.NetworkSettings.IPAddress}}'"
+          run docker exec lab2-app whoami
+          run docker exec lab2-app ps
+          run docker stats --no-stream lab2-app
+
+      - name: 4. Stop and remove
+        run: |
+          eval "$RUN"
+          run docker stop lab2-app
+          run docker ps -a --filter name=lab2-app
+          run docker rm lab2-app
+          run docker ps -a --filter name=lab2-app

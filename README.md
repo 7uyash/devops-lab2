@@ -16,3 +16,6 @@ Suyash Sahu — Roll No. 2301010476 — K R Mangalam University
 - `app/` — Python web app and its `Dockerfile` (non-root user, health check)
 - `k8s/app/` — Deployment (zero-downtime rolling update), NodePort Service (30082) and HorizontalPodAutoscaler (2–8 pods at 50% CPU)
 - `.github/workflows/k8s-report.yml` — builds the image inside Minikube, deploys, rolls out v2.0, scales manually and autoscales under load
+
+## Task 4: Containerize a sample application using Docker
+- `.github/workflows/docker.yml` — builds `app/Dockerfile`, shows the image layers, runs the container and tests it
