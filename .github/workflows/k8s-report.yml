@@ -31,10 +31,10 @@ jobs:
       - name: 1. Build container image
         run: |
           eval "$RUN"
-          eval $(minikube docker-env)
-          run docker build --build-arg APP_VERSION=1.0 -t lab2-app:1.0 app/
-          run docker build --build-arg APP_VERSION=2.0 -t lab2-app:2.0 app/
-          run "docker images lab2-app"
+          run cat app/Dockerfile
+          run minikube image build -t lab2-app:1.0 --build-opt=build-arg=APP_VERSION=1.0 app/
+          run minikube image build -t lab2-app:2.0 --build-opt=build-arg=APP_VERSION=2.0 app/
+          run "minikube image ls | grep lab2-app"
 
       - name: 2. Deploy to Kubernetes
         run: |
