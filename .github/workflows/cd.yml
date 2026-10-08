@@ -1,0 +1,87 @@
+name: CI/CD to Kubernetes
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "app/**"
+      - "k8s/cd/**"
+      - ".github/workflows/cd.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUN: 'run(){ echo "$ $*"; eval "$@"; echo; }'
+  IMAGE: ghcr.io/7uyash/lab2-app
+
+jobs:
+  test:
+    name: 1. Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke test the application
+        run: |
+          eval "$RUN"
+          python3 app/app.py &
+          sleep 2
+          run "curl -sf http://localhost:8080/health; echo"
+          run "curl -sf http://localhost:8080/; echo"
+
+  build:
+    name: 2. Build & Push Image
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Build and push to GitHub Container Registry
+        run: |
+          eval "$RUN"
+          TAG=${{ steps.meta.outputs.tag }}
+          echo '$ echo $GITHUB_TOKEN | docker login ghcr.io -u 7uyash --password-stdin'
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>&1 | grep Succeeded
+          echo
+          run "docker build -q --label org.opencontainers.image.source=https://github.com/7uyash/devops-lab2 -t $IMAGE:$TAG -t $IMAGE:latest app/"
+          run "docker push -q $IMAGE:$TAG"
+          run "docker push -q $IMAGE:latest"
+
+  deploy:
+    name: 3. Deploy to Kubernetes
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Minikube cluster
+        uses: medyagh/setup-minikube@latest
+      - name: Apply manifests automatically
+        run: |
+          eval "$RUN"
+          TAG=${{ needs.build.outputs.tag }}
+          echo '$ kubectl create secret docker-registry ghcr-secret --docker-server=ghcr.io --docker-username=7uyash --docker-password=$GITHUB_TOKEN'
+          kubectl create secret docker-registry ghcr-secret --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} --docker-password=${{ secrets.GITHUB_TOKEN }}
+          echo
+          run "cd k8s/cd && kustomize edit set image lab2-app=$IMAGE:$TAG && cd -"
+          run cat k8s/cd/kustomization.yaml
+          run kubectl apply -k k8s/cd
+          run "kubectl annotate deployment/lab2-cd kubernetes.io/change-cause=\"CD deploy of commit ${GITHUB_SHA::7}\" --overwrite"
+          run kubectl rollout status deployment/lab2-cd --timeout=180s
+      - name: Verify deployment
+        run: |
+          eval "$RUN"
+          run kubectl get deployment lab2-cd -o wide
+          run kubectl get pods -l app=lab2-cd
+          run "kubectl get pods -l app=lab2-cd -o jsonpath='{range .items[*]}{.metadata.name}{\"  \"}{.status.containerStatuses[0].imageID}{\"\\n\"}{end}'"
+          run kubectl rollout history deployment/lab2-cd
+          run "curl -s \$(minikube service lab2-cd-service --url); echo"

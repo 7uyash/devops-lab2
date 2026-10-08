@@ -1,12 +1,6 @@
 name: Containerize, Deploy and Autoscale
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - "app/**"
-      - "k8s/app/**"
-      - ".github/workflows/k8s-report.yml"
   workflow_dispatch:
 
 defaults:

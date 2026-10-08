@@ -29,3 +29,7 @@ Suyash Sahu — Roll No. 2301010476 — K R Mangalam University
 
 ## Task 7: Docker networking
 - `.github/workflows/docker-network.yml` — user-defined bridge network, communication by container name and by IP, isolation from the default bridge
+
+## Task 8: Continuous deployment to Kubernetes
+- `k8s/cd/` — Deployment, Service and `kustomization.yaml` (the image tag is set by the pipeline)
+- `.github/workflows/cd.yml` — Test → Build & Push image (`ghcr.io/7uyash/lab2-app:sha-<commit>`) → Deploy with `kubectl apply -k` on every push
