@@ -39,6 +39,7 @@ jobs:
           run docker start web2
           run "docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'"
           run docker restart web1
+          sleep 2
           run "curl -s http://localhost:8081; echo"
           run docker rm -f web1 web2
           run "docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'"
