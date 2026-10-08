@@ -31,7 +31,7 @@ jobs:
       - name: 2. Communicate using container names
         run: |
           eval "$RUN"
-          run docker exec client nslookup web
+          run docker exec client nslookup -type=a web.
           run docker exec client ping -c 3 web
           run "docker exec client wget -qO- http://web | grep -o '<title>.*</title>'"
 
