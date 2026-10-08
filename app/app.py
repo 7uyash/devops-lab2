@@ -17,6 +17,7 @@ class Handler(BaseHTTPRequestHandler):
                 "app": "lab2-app",
                 "version": VERSION,
                 "pod": socket.gethostname(),
+                "message": "Deployed automatically by the CD pipeline",
                 "work": total,
             }).encode()
             ctype = "application/json"
