@@ -11,3 +11,8 @@ Suyash Sahu — Roll No. 2301010476 — K R Mangalam University
 - `k8s/strategy/deployment.yaml` — Deployment with a RollingUpdate strategy (maxSurge 1, maxUnavailable 1)
 - `k8s/strategy/service.yaml` — NodePort Service on port 30081
 - `.github/workflows/k8s-strategies.yml` — rolling update v1→v2, faulty v3 + rollback, rollback to revision 1, scaling 4→8→2
+
+## Task 3: Containerization & orchestration report
+- `app/` — Python web app and its `Dockerfile` (non-root user, health check)
+- `k8s/app/` — Deployment (zero-downtime rolling update), NodePort Service (30082) and HorizontalPodAutoscaler (2–8 pods at 50% CPU)
+- `.github/workflows/k8s-report.yml` — builds the image inside Minikube, deploys, rolls out v2.0, scales manually and autoscales under load

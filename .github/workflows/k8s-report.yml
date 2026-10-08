@@ -1,0 +1,88 @@
+name: Containerize, Deploy and Autoscale
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "app/**"
+      - "k8s/app/**"
+      - ".github/workflows/k8s-report.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUN: 'run(){ echo "$ $*"; eval "$@"; echo; }'
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start Minikube cluster
+        uses: medyagh/setup-minikube@latest
+        with:
+          addons: metrics-server
+
+      - name: 1. Build container image
+        run: |
+          eval "$RUN"
+          eval $(minikube docker-env)
+          run docker build --build-arg APP_VERSION=1.0 -t lab2-app:1.0 app/
+          run docker build --build-arg APP_VERSION=2.0 -t lab2-app:2.0 app/
+          run "docker images lab2-app"
+
+      - name: 2. Deploy to Kubernetes
+        run: |
+          eval "$RUN"
+          run kubectl apply -f k8s/app/deployment.yaml -f k8s/app/service.yaml
+          run kubectl rollout status deployment/lab2-app --timeout=120s
+          run kubectl get deployment,svc,pods -l app=lab2-app -o wide
+          run kubectl get svc lab2-app-service
+
+      - name: 3. Service load balancing
+        run: |
+          eval "$RUN"
+          URL=$(minikube service lab2-app-service --url)
+          echo "Service URL: $URL"; echo
+          run "for i in 1 2 3 4 5 6; do curl -s $URL; echo; done"
+
+      - name: 4. Rolling update to v2.0
+        run: |
+          eval "$RUN"
+          run kubectl set image deployment/lab2-app lab2-app=lab2-app:2.0
+          run kubectl rollout status deployment/lab2-app --timeout=120s
+          run kubectl rollout history deployment/lab2-app
+          run "curl -s $(minikube service lab2-app-service --url); echo"
+
+      - name: 5. Manual scaling
+        run: |
+          eval "$RUN"
+          run kubectl scale deployment/lab2-app --replicas=5
+          run kubectl rollout status deployment/lab2-app --timeout=120s
+          run kubectl get pods -l app=lab2-app -o wide
+          run kubectl scale deployment/lab2-app --replicas=2
+          sleep 15
+          run kubectl get deployment lab2-app
+
+      - name: 6. Horizontal Pod Autoscaler under load
+        run: |
+          eval "$RUN"
+          run kubectl apply -f k8s/app/hpa.yaml
+          for i in $(seq 1 24); do kubectl top pods -l app=lab2-app >/dev/null 2>&1 && break; sleep 5; done
+          run kubectl get hpa lab2-app-hpa
+          run "for n in 1 2 3 4; do kubectl run load-\$n --image=busybox:1.36 --restart=Never -- /bin/sh -c 'while true; do wget -q -O- http://lab2-app-service >/dev/null; done'; done"
+          echo "--- HPA status every 20s while under load ---"
+          for i in $(seq 1 12); do
+            echo "[t+$((i*20))s] $(kubectl get hpa lab2-app-hpa --no-headers)"
+            sleep 20
+          done
+          echo
+          run kubectl top pods -l app=lab2-app
+          run kubectl get deployment lab2-app
+          run kubectl get pods -l app=lab2-app
+          run kubectl describe hpa lab2-app-hpa
