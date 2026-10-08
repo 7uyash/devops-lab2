@@ -23,3 +23,6 @@ Suyash Sahu — Roll No. 2301010476 — K R Mangalam University
 ## Task 5: Manage Docker containers and images
 - `compose/docker-compose.yml` + `compose/nginx.conf` — nginx reverse proxy in front of 3 app containers
 - `.github/workflows/docker-manage.yml` — container lifecycle, tagging and pushing to GitHub Container Registry, Docker Compose
+
+## Task 6: Docker storage
+- `.github/workflows/docker-storage.yml` — container-layer data loss, named volume persistence, bind mount
